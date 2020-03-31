@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -42,6 +43,87 @@ namespace Microsoft.DotnetOrg.GitHubCaching
             }
 
             return Task.CompletedTask;
+        }
+
+        public static async Task<Readme> GetReadme(this GitHubClient client, string owner, string repo)
+        {
+            try
+            {
+                return await client.Repository.Content.GetReadme(owner, repo);
+            }
+            catch (NotFoundException)
+            {
+                return null;
+            }
+        }
+
+        public static async Task<GitHubCodeOfConduct> GetCodeOfConduct(this GitHubClient client, string owner, string repo)
+        {
+            try
+            {
+                var uri = new Uri(client.Connection.BaseAddress, $"/repos/{owner}/{repo}/community/code_of_conduct");
+                var response = await client.Connection.Get<GitHubCodeOfConduct>(uri, null, "application/vnd.github.scarlet-witch-preview+json");
+                if (response.Body?.Content == null)
+                    return null;
+
+                // Make sure we have a sensible value
+                response.Body.Name = "CONTRIBUTING.md";
+
+                return response.Body;
+            }
+            catch (NotFoundException)
+            {
+
+                return null;
+            }
+        }
+
+        public static async Task<RepositoryContent> GetContributing(this GitHubClient client, string owner, string repo)
+        {
+            try
+            {
+                var profileUri = new Uri(client.Connection.BaseAddress, $"/repos/{owner}/{repo}/community/profile");
+                var profileResponseRaw = await client.Connection.Get<Dictionary<string, object>>(profileUri, null, "application/vnd.github.black-panther-preview+json");
+
+                if (profileResponseRaw.Body == null)
+                    return null;
+
+                if (!profileResponseRaw.Body.TryGetValue("files", out var filesRaw))
+                    return null;
+
+                var files = filesRaw as IDictionary<string, object>;
+                if (files == null)
+                    return null;
+
+                if (!files.TryGetValue("contributing", out var contributingRaw))
+                    return null;
+
+                var contributing = contributingRaw as IDictionary<string, object>;
+                if (contributing == null)
+                    return null;
+
+                if (!contributing.TryGetValue("html_url", out var htmlUrlRaw))
+                    return null;
+
+                var htmlUrl = htmlUrlRaw as string;
+                if (htmlUrl == null)
+                    return null;
+
+                if (!contributing.TryGetValue("url", out var urlRaw))
+                    return null;
+
+                var url = urlRaw as string;
+                if (url == null)
+                    return null;
+
+                var uri = new Uri(url);
+                var response = await client.Connection.GetResponse<RepositoryContent>(uri);
+                return response.Body;
+            }
+            catch (NotFoundException)
+            {
+                return null;
+            }
         }
     }
 }
